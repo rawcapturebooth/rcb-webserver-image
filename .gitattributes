@@ -1,0 +1,2 @@
+# Der Ablauf baut unter Linux - Zeilenenden bleiben deshalb ueberall LF.
+* text=auto eol=lf

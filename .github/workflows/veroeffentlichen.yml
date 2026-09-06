@@ -1,0 +1,93 @@
+# Baut das Laufzeit-Abbild und legt es in die Container-Registry von GitHub.
+#
+# Ausgeloest wird der Ablauf von einem Kennzeichen der Form 'v1.0.0'. Die
+# Nummer darin muss mit der Datei VERSION uebereinstimmen - der Ablauf prueft
+# das und bricht sonst ab, damit Kennzeichen und Datei nicht auseinanderlaufen.
+#
+# Angemeldet wird sich mit dem Schluessel, den GitHub dem Ablauf selbst gibt.
+# Es ist also kein Zugriffsschluessel zu hinterlegen und keiner zu erneuern.
+
+name: Abbild veroeffentlichen
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  ABBILD: ${{ github.repository_owner }}/rcb-webserver
+
+jobs:
+  bauen:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Stand holen
+        uses: actions/checkout@v4
+
+      - name: Fassung aus VERSION lesen und mit dem Kennzeichen abgleichen
+        id: fassung
+        run: |
+          fassung="$(tr -d ' \t\r\n' < VERSION)"
+          if [ -z "$fassung" ]; then
+            echo "VERSION ist leer." >&2
+            exit 1
+          fi
+          echo "fassung=$fassung" >> "$GITHUB_OUTPUT"
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            kennzeichen="${GITHUB_REF_NAME#v}"
+            if [ "$kennzeichen" != "$fassung" ]; then
+              echo "Kennzeichen v$kennzeichen und VERSION $fassung stimmen nicht ueberein." >&2
+              exit 1
+            fi
+          fi
+          echo "Gebaut wird Fassung $fassung."
+
+      - name: Bauwerkzeug fuer mehrere Rechnerarten bereitstellen
+        uses: docker/setup-qemu-action@v3
+
+      - name: Buildx einrichten
+        uses: docker/setup-buildx-action@v3
+
+      - name: An der Registry anmelden
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Bauen und hochladen
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          # amd64 fuer den ueblichen Server, arm64 fuer Kleinrechner und
+          # ARM-Speichergeraete. Der zweite Bau laeuft nachgeahmt und dauert
+          # deutlich laenger - das ist bei einem oeffentlichen Repository
+          # kostenlos und faellt nur beim Veroeffentlichen an.
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.ABBILD }}:${{ steps.fassung.outputs.fassung }}
+            ${{ env.REGISTRY }}/${{ env.ABBILD }}:latest
+          labels: |
+            org.opencontainers.image.title=RAWCaptureBooth Selfhosted-Webserver (Laufzeit)
+            org.opencontainers.image.description=Apache mit PHP 8.2 und den Erweiterungen, die der Selfhosted-Webserver braucht. Enthaelt keinen Anwendungscode.
+            org.opencontainers.image.version=${{ steps.fassung.outputs.fassung }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.url=https://rawcapturebooth.app
+            org.opencontainers.image.vendor=Thomas Michael Mueller
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Ergebnis melden
+        run: |
+          echo "### Abbild veroeffentlicht" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "${REGISTRY}/${ABBILD}:${{ steps.fassung.outputs.fassung }}" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
