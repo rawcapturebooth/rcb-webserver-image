@@ -3,7 +3,7 @@
 Das Container-Abbild, in dem der **RAWCaptureBooth Selfhosted-Webserver** läuft.
 
 ```
-ghcr.io/rawcapturebooth/rcb-webserver:1.0.0
+ghcr.io/rawcapturebooth/rcb-webserver:latest
 ```
 
 ## Was drin ist — und was nicht
@@ -24,7 +24,7 @@ Wer das Abbild herunterlädt, bekommt ein vorkonfiguriertes PHP. Sonst nichts.
 ```yaml
 services:
   photobooth:
-    image: ghcr.io/rawcapturebooth/rcb-webserver:1.0.0
+    image: ghcr.io/rawcapturebooth/rcb-webserver:latest
     restart: unless-stopped
     ports:
       - "98:80"
@@ -35,11 +35,28 @@ services:
       # ... weitere Variablen siehe Installationsanleitung
 ```
 
-Die vollständige Vorlage liegt dem Auslieferungspaket des Webservers bei
-(`docker/Docker-Compose-Stack.txt`).
+Die vollständigen Vorlagen liegen dem Auslieferungspaket des Webservers bei:
+`docker/Docker-Compose-Stack.txt` für Portainer und andere Oberflächen,
+`docker/Docker-Compose-Stack-Coolify.txt` für Coolify.
 
-**Nummer festhalten, nicht `latest` verwenden.** Sonst wechselt beim nächsten
-Neustart unbemerkt der Unterbau unter einer laufenden Anlage.
+**`latest` oder eine feste Nummer.** Ein bloßer Neustart wechselt das Abbild
+nicht – das geschieht erst, wenn es ausdrücklich neu geholt wird
+(`docker compose pull`, in Portainer „Re-pull image“, in Coolify beim
+erneuten Bereitstellen). Wer eine Anlage auf einem Stand festhalten will,
+trägt statt `latest` die Nummer ein, etwa `:1.2.0`.
+
+## Dateirechte beim Start
+
+Apache läuft als `www-data`. Hat jemand den Auftritt per SFTP oder über eine
+Netzfreigabe abgelegt, gehören die Dateien diesem Zugang – der Webserver kann
+dann weder Bilder ablegen noch sich selbst aktualisieren.
+
+Seit 1.2.0 prüft das Abbild beim Start, ob `www-data` in den oberen beiden
+Verzeichnisebenen des Auftritts schreiben darf. Fehlt das Recht, setzt es den
+Besitzer einmal auf `www-data` und schreibt das ins Protokoll des Containers.
+Passt alles, bleibt es bei der Prüfung. Ein Fehlschlag hält den Start nicht auf.
+
+Abschalten lässt sich das mit der Umgebungsvariable `RCB_RECHTE_SETZEN=0`.
 
 ## Fassungen
 

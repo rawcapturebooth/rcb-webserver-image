@@ -55,3 +55,12 @@ RUN printf '%s\n' \
     a2enconf rcb
 
 WORKDIR /var/www/html
+
+# Startskript: setzt die Rechte am eingehaengten Auftritt, wenn der Webserver
+# dort nicht schreiben darf, und startet dann wie das Grundbild. Beschreibung
+# im Skript selbst. Das 'sed' entfernt Windows-Zeilenenden, falls die Datei
+# auf einem Windows-Rechner ausgecheckt und von dort gebaut wird.
+COPY rcb-start /usr/local/bin/rcb-start
+RUN sed -i 's/\r$//' /usr/local/bin/rcb-start && chmod 755 /usr/local/bin/rcb-start
+ENTRYPOINT ["rcb-start"]
+CMD ["apache2-foreground"]
