@@ -1,0 +1,36 @@
+#!/bin/sh
+# Startskript des Laufzeit-Abbilds.
+#
+# Prueft vor dem Start von Apache, ob der Webserver (www-data) in den
+# Verzeichnissen des eingehaengten Auftritts schreiben darf. Wer die Dateien
+# per SFTP oder ueber eine Netzfreigabe abgelegt hat, dem gehoeren sie - Apache
+# laeuft aber als www-data und kann dann weder Bilder ablegen noch sich selbst
+# aktualisieren. Fehlt das Recht, setzt das Skript den Besitzer einmal auf
+# www-data. Danach ist nichts mehr zu tun; bei jedem weiteren Start bleibt es
+# bei der Pruefung.
+#
+# Geprueft wird das Schreibrecht, nicht der Besitzer: Wer es anders geloest
+# hat (Gruppe, ACL), dessen Dateien bleiben unangetastet. Geprueft werden nur
+# die oberen zwei Ebenen - darunter liegen die Bilder, und die gehoeren ohnehin
+# dem Webserver.
+#
+# Abschalten: RCB_RECHTE_SETZEN=0
+#
+# Ein Fehler hier haelt den Start nie auf. Ein Webserver mit falschen Rechten
+# ist besser als keiner - die Verwaltung sagt dann selbst, was fehlt.
+
+WEB=/var/www/html
+
+if [ "${RCB_RECHTE_SETZEN:-1}" != "0" ] && [ "$(id -u)" = "0" ] && [ -d "$WEB" ]; then
+    gesperrt=$(su -s /bin/sh www-data -c "find '$WEB' -maxdepth 2 -type d ! -writable -print -quit" 2>/dev/null)
+    if [ -n "$gesperrt" ]; then
+        echo "rcb-start: www-data darf nicht in $gesperrt schreiben - Besitzer von $WEB wird auf www-data gesetzt." >&2
+        if chown -R www-data:www-data "$WEB"; then
+            echo "rcb-start: erledigt." >&2
+        else
+            echo "rcb-start: chown ist fehlgeschlagen. Bitte auf dem Server von Hand: chown -R 33:33 <Verzeichnis>" >&2
+        fi
+    fi
+fi
+
+exec docker-php-entrypoint "$@"
